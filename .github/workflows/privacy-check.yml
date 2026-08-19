@@ -1,0 +1,40 @@
+name: Privacy check
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  privacy:
+    name: Reject private material
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject prohibited filenames
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files -z | grep -zEq '(^|/)(\.env(\..*)?|.*\.(log|pem|key|p12|pfx|session|transcript)|id_(rsa|ecdsa|ed25519|dsa))$'; then
+            echo 'Privacy check failed: a prohibited filename is tracked.' >&2
+            exit 1
+          fi
+
+      - name: Reject credentials and machine-specific paths
+        shell: bash
+        run: |
+          set -euo pipefail
+              pattern='-----BEGIN( [A-Z0-9]+)? PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|/(home|Users)/[^[:space:]/]+|[A-Za-z]:\\Users\\'
+              if git grep -q -E -e "$pattern"; then
+                echo 'Privacy check failed: tracked content matches a credential or local-path pattern.' >&2
+                exit 1
+              else
+                grep_status=$?
+                if [ "$grep_status" -ne 1 ]; then
+                  echo "Privacy check could not scan tracked content (git grep exited $grep_status)." >&2
+                  exit "$grep_status"
+                fi
+              fi

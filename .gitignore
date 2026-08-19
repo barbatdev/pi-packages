@@ -1,0 +1,19 @@
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ecdsa
+id_ed25519
+
+# Local and generated metadata
+.DS_Store
+Thumbs.db
+*.log
+*.session
+*.transcript
+# Local Pi runtime state
+.atl/
