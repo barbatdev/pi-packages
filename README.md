@@ -4,11 +4,15 @@ A personal open-source monorepo for modular Pi packages and extensions built thr
 
 ## Status
 
-This repository is at an early stage. No packages have been published yet, and it does not currently provide installation instructions, a package manager, a monorepo tool, a release process, or build CI.
+This repository is at an early stage. No packages have been published, and it does not provide installation instructions or a release process. CI verifies typechecking, tests, and the dry-run package surface.
+
+## Packages
+
+- [`@barbatdev/pi-safe-ops`](packages/safe-ops/README.md) — under development; private, unpublished, and not installable.
 
 ## Independence
 
-pi-packages is independent from Pi and [gentle-pi](https://github.com/Gentleman-Programming/gentle-pi). It is not a fork of either project. The intent is to coexist with gentle-pi; compatibility has not yet been established because no packages exist.
+pi-packages is independent from Pi and [gentle-pi](https://github.com/Gentleman-Programming/gentle-pi). It is not a fork of either project. The intent is to coexist with gentle-pi.
 
 ## Project decisions
 

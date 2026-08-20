@@ -10,6 +10,7 @@ id_ecdsa
 id_ed25519
 
 # Local and generated metadata
+node_modules/
 .DS_Store
 Thumbs.db
 *.log
