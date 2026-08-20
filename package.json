@@ -1,0 +1,13 @@
+{
+  "name": "pi-packages",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "check": "pnpm --filter @barbatdev/pi-safe-ops run check",
+    "test": "pnpm --filter @barbatdev/pi-safe-ops run test",
+    "typecheck": "pnpm --filter @barbatdev/pi-safe-ops run typecheck"
+  }
+}
