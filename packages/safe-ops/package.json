@@ -1,0 +1,26 @@
+{
+  "name": "@barbatdev/pi-safe-ops",
+  "version": "0.0.0",
+  "private": true,
+  "files": ["src", "docs"],
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.82.1 <1"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.82.1",
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "pnpm run typecheck && pnpm run test"
+  }
+}
