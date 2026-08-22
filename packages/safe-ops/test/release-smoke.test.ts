@@ -4,7 +4,7 @@ import test from "node:test";
 // The smoke helper is plain dependency-free ESM, intentionally without a TypeScript declaration file.
 // @ts-ignore -- exercised directly by Node's ESM loader in this pure-unit test.
 const smoke = await import("../../../scripts/release-smoke.mjs");
-const { EXPECTED_PACKAGE_PATHS, classifyPiResult, comparePacks, parsePackResult, validateArchivePath, validateManifest } = smoke;
+const { EXPECTED_PACKAGE_PATHS, MAX_DIAGNOSTIC_CHARS, classifyPiResult, comparePacks, formatPackEvidence, formatPiDiagnostic, parsePackResult, sanitizeDiagnosticOutput, validateArchivePath, validateManifest } = smoke;
 
 const expectedPaths = EXPECTED_PACKAGE_PATHS as string[];
 const files = expectedPaths.map((path: string) => ({ path }));
@@ -19,7 +19,7 @@ test("pack validation accepts one exact package result only", () => {
   for (const name of ["../escape.tgz", "/absolute.tgz", "nested/file.tgz", ""]) assert.throws(() => validateArchivePath("/work/one", name));
 });
 
-test("pack comparison rejects changed hashes, sizes, and package surfaces", () => {
+test("pack comparison and bounded evidence reject unsafe surfaces", () => {
   const digest = { sha256: "a".repeat(64), sha1: "b".repeat(40), sha512: "c".repeat(128), sri: "sha512-c", size: 42, files: EXPECTED_PACKAGE_PATHS };
   assert.doesNotThrow(() => comparePacks(digest, { ...digest }));
   assert.throws(() => comparePacks(digest, { ...digest, size: 43 }));
@@ -28,6 +28,24 @@ test("pack comparison rejects changed hashes, sizes, and package surfaces", () =
   assert.throws(() => comparePacks(digest, { ...digest, files: [...EXPECTED_PACKAGE_PATHS, EXPECTED_PACKAGE_PATHS[0]] }));
   assert.throws(() => comparePacks(digest, { ...digest, files: EXPECTED_PACKAGE_PATHS.slice(1) }));
   assert.throws(() => comparePacks(digest, { ...digest, files: [...EXPECTED_PACKAGE_PATHS].reverse() }));
+
+
+  assert.equal(sanitizeDiagnosticOutput("\u001b[31mline\r\nnext\r\u0000\tend\u001b[0m"), "line\nnext\n�\tend");
+  assert.equal(sanitizeDiagnosticOutput(null), "");
+  assert.equal(sanitizeDiagnosticOutput(Buffer.from("raw-buffer")), "");
+  const diagnostic = formatPiDiagnostic(null, "out\r\n\u0007", "\u001b[32merr\u001b[0m");
+  assert.deepEqual(JSON.parse(diagnostic), { phase: "pi-terminal", status: null, stdout: "out\n�", stderr: "err" });
+  assert.equal(diagnostic.includes("\n"), false);
+  const bounded = formatPiDiagnostic(1, "x".repeat(10_000), "y".repeat(10_000));
+  assert.ok(bounded.length <= MAX_DIAGNOSTIC_CHARS);
+  assert.ok(JSON.parse(bounded).stdout.length < 10_000);
+  assert.ok(JSON.parse(bounded).stderr.length < 10_000);
+
+  const evidence = { sha256: "a".repeat(64), sha1: "b".repeat(40), sha512: "c".repeat(128), sri: "sha512-c", size: 42, files: ["unexpected"] };
+  const packEvidence = formatPackEvidence("a".repeat(40), "0.1.0-beta.0", evidence);
+  assert.deepEqual(JSON.parse(packEvidence), { phase: "pack", commit: "a".repeat(40), version: "0.1.0-beta.0", paths: expectedPaths, sha256: evidence.sha256, sha1: evidence.sha1, sha512: evidence.sha512, sri: evidence.sri, size: evidence.size });
+  assert.equal(packEvidence.includes("\n"), false);
+  assert.ok(packEvidence.length <= MAX_DIAGNOSTIC_CHARS);
 });
 
 test("manifest and Pi terminal policy fail closed", () => {
