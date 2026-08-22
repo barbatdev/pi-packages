@@ -8,12 +8,13 @@ After the one-time bootstrap has completed, every release uses the protected-mai
 
 1. Create an approved issue and release PR, then complete the protected merge to `main`.
 2. Confirm the exact `main` CI result and public-safe privacy review for the release commit.
-3. Create the exact annotated package tag `@barbatdev/pi-safe-ops@<version>` at that immutable `main` commit.
-4. Verify an isolated tarball with scripts disabled and compare its package files and hash to the approved candidate.
-5. Obtain exact human SHA/tag/files/hash approval.
-6. Dispatch `publish.yml` from protected `main`. The workflow validates the tag and current `main`, publishes through OIDC with provenance, and uses the derived dist-tag.
-7. Verify the published version and dist-tag.
-8. Create the GitHub Release only after publish+trust verification succeeds.
+3. Require a successful `Release smoke` push run for that exact protected-main SHA before tag or publication authorization. Its bounded evidence is the commit, version, 16 package paths, archive size, and SHA-256/SHA-1/SRI hashes. Manual dispatch is only a same-main-SHA diagnostic rerun.
+4. Create the exact annotated package tag `@barbatdev/pi-safe-ops@<version>` at that immutable `main` commit.
+5. Verify an isolated tarball with scripts disabled and compare its package files and hash to the approved candidate.
+6. Obtain exact human SHA/tag/files/hash approval.
+7. Dispatch `publish.yml` from protected `main`. The workflow validates the tag and current `main`, publishes through OIDC with provenance, and uses the derived dist-tag.
+8. Verify the published version and dist-tag.
+9. Create the GitHub Release only after publish+trust verification succeeds.
 
 ## First-package bootstrap exception
 

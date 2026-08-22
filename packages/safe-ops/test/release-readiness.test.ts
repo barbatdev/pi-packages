@@ -78,6 +78,21 @@ test("publish workflow is a protected, dispatch-only OIDC gate", () => {
   }
 });
 
+test("release smoke workflow is an isolated, release-only gate", () => {
+  assert.equal(existsSync(join(repositoryDirectory, ".github/workflows/release-smoke.yml")), true, "release smoke workflow must exist");
+  const workflow = readRepositoryFile(".github/workflows/release-smoke.yml");
+  for (const text of [
+    "name: Release smoke", "pull_request:", "push:", "workflow_dispatch:", "contents: read", "timeout-minutes:",
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "persist-credentials: false", "fetch-depth: 1",
+    "docker.io/library/node@sha256:f2bf1588ef7e8dd183d9e4cb4330a0d952204b7348ead42afb1aab11f9c4911b", "--network none",
+    "npm@11.16.0", "@earendil-works/pi-coding-agent@0.82.1", "--ignore-scripts", "--read-only", "--cap-drop ALL", "--security-opt no-new-privileges",
+    "github.event.pull_request.head.sha", "github.event.after", "git ls-remote origin refs/heads/main", "release-smoke.mjs", "rm -rf \"$SMOKE_ROOT\"",
+  ]) assert.ok(workflow.includes(text), `release smoke must include ${text}`);
+  for (const forbidden of ["pull_request_target:", "self-hosted", "secrets.", "id-token: write", "actions/cache", "upload-artifact", "download-artifact", "npm publish", "npm trust", "git tag", "gh release", "docker.sock"]) {
+    assert.equal(workflow.includes(forbidden), false, `release smoke must not include ${forbidden}`);
+  }
+});
+
 test("release documentation states the bounded first-package bootstrap and future OIDC path", () => {
   const packageReadme = readRepositoryFile("packages/safe-ops/README.md");
   const readme = readRepositoryFile("README.md");
@@ -107,6 +122,8 @@ test("release documentation states the bounded first-package bootstrap and futur
     "OIDC",
     "provenance",
     "NPM_TOKEN",
+    "successful `Release smoke` push run",
+    "Manual dispatch is only a same-main-SHA diagnostic rerun",
   ]) {
     assert.ok(runbook.toLowerCase().includes(text.toLowerCase()), `runbook must include ${text}`);
   }
