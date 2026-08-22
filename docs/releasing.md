@@ -1,27 +1,40 @@
 # Package release runbook
 
-`@barbatdev/pi-safe-ops` is unpublished, private, and fixed at `0.0.0`. This runbook prepares maintainers for a future release; it does not authorize local publishing.
+This runbook prepares `@barbatdev/pi-safe-ops` releases. It does not authorize a local publish, tag, npm trust change, or GitHub Release.
 
-## Maintainer readiness
+## Normal releases: protected-main OIDC path
 
-Use independent SemVer, Conventional Commits, and Changesets. A release PR adds the required changeset and version update; this readiness PR intentionally adds neither a changeset nor a changelog.
+After the one-time bootstrap has completed, every release uses the protected-main GitHub Actions OIDC/provenance path. It uses no `NPM_TOKEN` or stored publishing secret, and the bootstrap exception is never reused.
 
-## External prerequisites
+1. Create an approved issue and release PR, then complete the protected merge to `main`.
+2. Confirm the exact `main` CI result and public-safe privacy review for the release commit.
+3. Create the exact annotated package tag `@barbatdev/pi-safe-ops@<version>` at that immutable `main` commit.
+4. Verify an isolated tarball with scripts disabled and compare its package files and hash to the approved candidate.
+5. Obtain exact human SHA/tag/files/hash approval.
+6. Dispatch `publish.yml` from protected `main`. The workflow validates the tag and current `main`, publishes through OIDC with provenance, and uses the derived dist-tag.
+7. Verify the published version and dist-tag.
+8. Create the GitHub Release only after publish+trust verification succeeds.
 
-Before opening a release PR, confirm all of the following:
+## First-package bootstrap exception
 
-- Protect `main` and require the repository checks.
-- Create the `npm-publish` GitHub environment with required reviewers.
-- Configure npm Trusted Publishing for the repository, `publish.yml` workflow, and `npm-publish` environment tuple.
-- Use no npm token or stored publishing secret.
+`@barbatdev/pi-safe-ops` is absent from npm, so Trusted Publishing cannot bootstrap its first package record. The bounded exception applies only to `0.1.0-beta.0`: it has no provenance because OIDC is unavailable, and must never be reused after npm trust exists.
 
-## Release path
+1. Create an approved issue and beta PR, then complete the protected merge to `main`.
+2. Confirm the exact `main` CI result and public-safe privacy review for that merge commit.
+3. Create the exact annotated package tag `@barbatdev/pi-safe-ops@0.1.0-beta.0` at that immutable commit.
+4. Perform isolated tarball verification with scripts disabled; retain the exact package-file list and hash as approval evidence.
+5. Obtain exact human SHA/tag/files/hash approval before any registry action.
+6. In an isolated remote container, use interactive web login/2FA for one ephemeral beta publish with scripts disabled. Do not use a token, local workstation, GitHub Actions dispatch, or a reused environment.
+7. Immediately configure npm trust with the verified npm 11.16.0 command shape:
 
-1. Prepare and merge a release PR through Changesets. The first prerelease is `0.1.0-beta.0`.
-2. Fetch `origin/main` immediately before creating the exact annotated tag `@barbatdev/pi-safe-ops@<version>` at that commit. Never move, replace, or reuse a tag.
-3. Dispatch `publish.yml` from protected `main`, supplying only that tag. The workflow verifies the tag, commit, manifest, package surface, and current remote `main` before OIDC publication.
-4. Verify the exact npm version and dist-tag after the workflow succeeds. Create the GitHub Release only as a follow-up to successful publication.
+   ```sh
+   npm trust github @barbatdev/pi-safe-ops --file publish.yml --repository barbatdev/pi-packages --environment npm-publish --allow-publish
+   ```
+
+   The shape was checked with `npm@11.16.0` help before documenting it. Do not execute it until the preceding approval and successful beta publish exist.
+8. Verify/logout/destroy: verify the npm version, beta dist-tag, and trusted-publisher tuple; then logout and destroy the isolated environment.
+9. Create the GitHub Release only after publish+trust verification succeeds.
 
 ## Failure rules
 
-Never publish locally. If dispatch or publication fails, keep the tag immutable. Re-dispatch only when the same annotated tag still peels to current `origin/main`; otherwise prepare a new release commit and version. Do not bypass the environment, Trusted Publishing, provenance, or package checks.
+Never publish locally. Keep every annotated tag immutable. A failed publication does not authorize a retag, a new exception, or a bypass of protected-main CI, privacy review, isolated tarball verification, exact human approval, OIDC, provenance, or npm trust.
