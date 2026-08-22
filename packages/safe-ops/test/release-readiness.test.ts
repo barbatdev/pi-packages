@@ -96,6 +96,16 @@ test("release smoke workflow is an isolated, release-only gate", () => {
   assert.ok(dockerRuns[1]?.includes('--env RELEASE_SMOKE_SHA="$BOUND_SHA"'));
   assert.equal(dockerRuns[1]?.includes("GITHUB_SHA"), false, "the smoke receives only the bound SHA");
   assert.equal(/\/(?:home|Users)\//.test(workflow), false, "tracked workflow passes the exact privacy path regex");
+  assert.equal(workflow.includes("${{ runner.temp }}"), false, "job environments cannot use the runner context");
+  const jobEnvironment = workflow.match(/^    env:\n([\s\S]*?)^    steps:/m)?.[1];
+  assert.ok(jobEnvironment, "smoke job environment must exist");
+  assert.ok(jobEnvironment.includes("SMOKE_NAME: release-smoke-${{ github.run_id }}-${{ github.run_attempt }}"), "smoke name uses only job-env-supported GitHub contexts");
+  assert.equal(jobEnvironment.includes("SMOKE_ROOT:"), false, "the root is derived in each shell step from the trusted runner environment");
+  const stepRun = (name: string) => workflow.match(new RegExp(`- name: ${name}[\\s\\S]*?run: \\|\\n([\\s\\S]*?)(?=\\n          - name:|$)`))?.[1];
+  for (const name of ["Bootstrap pinned tools", "Run isolated smoke", "Remove smoke state"]) {
+    assert.ok(stepRun(name)?.includes('SMOKE_ROOT="$RUNNER_TEMP/$SMOKE_NAME"'), `${name} derives its root from trusted runner state`);
+  }
+  assert.ok(stepRun("Remove smoke state")?.includes('case "$SMOKE_ROOT" in "$RUNNER_TEMP"/release-smoke-*)'), "cleanup retains the exact trusted-prefix guard");
   for (const text of [
     "name: Release smoke", "pull_request:", "push:", "workflow_dispatch:", "contents: read", "timeout-minutes:",
     "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "persist-credentials: false", "fetch-depth: 1",
