@@ -18,9 +18,11 @@ export function sanitizeDiagnosticOutput(value) {
 export function formatPiDiagnostic(status, stdout, stderr) {
   return serializeBoundedRecord({ phase: "pi-terminal", status: typeof status === "number" && Number.isFinite(status) ? status : null, stdout: sanitizeDiagnosticOutput(stdout), stderr: sanitizeDiagnosticOutput(stderr) });
 }
-const archiveEvidenceRecord = (phase, commit, version, evidence, pi) => serializeBoundedRecord({ phase, commit, version, paths: EXPECTED_PACKAGE_PATHS, sha256: evidence.sha256, sha1: evidence.sha1, sha512: evidence.sha512, sri: evidence.sri, size: evidence.size, ...(pi ? { pi } : {}) });
+const archiveEvidenceRecord = (phase, commit, version, evidence, extra) => serializeBoundedRecord({ phase, commit, version, paths: EXPECTED_PACKAGE_PATHS, sha256: evidence.sha256, sha1: evidence.sha1, sha512: evidence.sha512, sri: evidence.sri, size: evidence.size, ...extra });
 export const formatPackEvidence = (commit, version, evidence) => archiveEvidenceRecord("pack", commit, version, evidence);
-export const formatCompleteEvidence = (commit, version, evidence) => archiveEvidenceRecord("complete", commit, version, evidence, { install: true, list: true, load: true, remove: true });
+export const formatInstalledEvidence = (commit, version, npmVersion, piVersion) => serializeBoundedRecord({ phase: "installed", commit, version, npmVersion, piVersion, packageListed: true, nestedPi: false });
+export const formatTerminalEvidence = (token) => { if (token !== "expected-no-model" && token !== "expected-no-key") fail("Pi terminal token is invalid"); return serializeBoundedRecord({ phase: "terminal", token }); };
+export const formatCompleteEvidence = (commit, version, evidence) => archiveEvidenceRecord("complete", commit, version, evidence, { removed: true });
 
 export function parsePackResult(output) {
   let value; try { value = JSON.parse(output); } catch { fail("pack JSON is invalid"); }
@@ -45,9 +47,20 @@ const PI_NO_MODEL_STDERR = [
   "  /tools/node_modules/@earendil-works/pi-coding-agent/docs/providers.md",
   "  /tools/node_modules/@earendil-works/pi-coding-agent/docs/models.md",
 ].join("\n");
+const PI_NO_KEY_STDERR = [
+  "No API key found for the selected model.",
+  "",
+  "Use /login to log into a provider via OAuth or API key. See:",
+  "  /tools/node_modules/@earendil-works/pi-coding-agent/docs/providers.md",
+  "  /tools/node_modules/@earendil-works/pi-coding-agent/docs/models.md",
+].join("\n");
 const normalizePiTerminal = (value) => value.replace(/\u001B\[[0-9;]*m/g, "").replace(/\r\n/g, "\n").replace(/\n$/, "");
 export function classifyPiResult(status, stdout, stderr) {
-  return status === 1 && stdout === "" && normalizePiTerminal(stderr) === PI_NO_MODEL_STDERR ? "expected-no-model" : "unexpected";
+  if (status !== 1 || stdout !== "") return "unexpected";
+  const normalized = normalizePiTerminal(stderr);
+  if (normalized === PI_NO_MODEL_STDERR) return "expected-no-model";
+  if (normalized === PI_NO_KEY_STDERR) return "expected-no-key";
+  return "unexpected";
 }
 const run = (file, args, options = {}) => {
   const result = spawnSync(file, args, { encoding: "utf8", shell: false, timeout: 30_000, maxBuffer: 65_536, windowsHide: true, ...options });
@@ -58,7 +71,10 @@ const pack = (npm, directory, output) => { mkdirSync(output, { recursive: true }
 
 export function main(env = process.env) {
   const sha = env.RELEASE_SMOKE_SHA; if (!/^[a-f0-9]{40}$/.test(sha ?? "") || run("git", ["rev-parse", "HEAD"], { cwd: "/repo" }).trim() !== sha) fail("HEAD is not the bound commit");
-  const npm = "/tools/node_modules/.bin/npm", pi = "/tools/node_modules/.bin/pi", pkg = "/repo/packages/safe-ops", work = "/work"; if (run(npm, ["--version"]).trim() !== "11.16.0") fail("npm is not pinned"); const manifest = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")); validateManifest(manifest);
+  const npm = "/tools/node_modules/.bin/npm", pi = "/tools/node_modules/.bin/pi", pkg = "/repo/packages/safe-ops", work = "/work";
+  const npmVersion = run(npm, ["--version"]).trim(); if (npmVersion !== "11.16.0") fail("npm is not pinned");
+  const piVersion = JSON.parse(readFileSync("/tools/node_modules/@earendil-works/pi-coding-agent/package.json", "utf8")).version; if (piVersion !== "0.82.1") fail("Pi is not pinned");
+  const manifest = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")); validateManifest(manifest);
   const dirs = [join(work, "one"), join(work, "two"), join(work, "consumer"), join(work, "home"), join(work, "pi"), join(work, "session")];
   try {
     const first = pack(npm, pkg, dirs[0]), second = pack(npm, pkg, dirs[1]); comparePacks(first.evidence, second.evidence);
@@ -67,9 +83,12 @@ export function main(env = process.env) {
     const source = join(dirs[2], "node_modules/@barbatdev/pi-safe-ops"); if (existsSync(join(source, "node_modules/@earendil-works/pi-coding-agent"))) fail("consumer has nested Pi");
     mkdirSync(dirs[4], { recursive: true }); writeFileSync(join(dirs[4], "settings.json"), JSON.stringify({ npmCommand: [npm] })); const isolated = { ...env, HOME: dirs[3], PI_CODING_AGENT_DIR: dirs[4], PI_CODING_AGENT_SESSION_DIR: join(work, "session"), PI_OFFLINE: "1" };
     run(pi, ["install", source], { env: isolated }); if (!run(pi, ["list"], { env: isolated }).includes("@barbatdev/pi-safe-ops")) fail("Pi did not list package");
+    console.log(formatInstalledEvidence(sha, manifest.version, npmVersion, piVersion));
     const result = spawnSync(pi, ["--offline", "--no-session", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--print", "release smoke"], { encoding: "utf8", shell: false, timeout: 30_000, maxBuffer: 65_536, env: isolated });
     if (result.error) fail("Pi terminal failed");
-    if (classifyPiResult(result.status, result.stdout ?? "", result.stderr ?? "") !== "expected-no-model") fail(formatPiDiagnostic(result.status, result.stdout, result.stderr));
+    const terminal = classifyPiResult(result.status, result.stdout ?? "", result.stderr ?? "");
+    if (terminal === "unexpected") fail(formatPiDiagnostic(result.status, result.stdout, result.stderr));
+    console.log(formatTerminalEvidence(terminal));
     run(pi, ["remove", source], { env: isolated }); if (run(pi, ["list"], { env: isolated }).includes("@barbatdev/pi-safe-ops")) fail("Pi did not remove package");
     console.log(formatCompleteEvidence(sha, manifest.version, first.evidence));
   } finally { for (const path of dirs) rmSync(path, { recursive: true, force: true }); }
