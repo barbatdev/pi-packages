@@ -1,0 +1,117 @@
+name: Publish package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Annotated package tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-publish
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.19.0
+      - name: Pin package tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          npm install --global npm@11.16.0 --ignore-scripts
+          test "$(npm --version)" = "11.16.0"
+      - name: Validate release tag and immutable source
+        id: release_policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^@barbatdev/pi-safe-ops@([0-9]+)\.([0-9]+)\.([0-9]+)(-(beta|next)\.([0-9]+))?$ ]]; then
+            echo "The tag is not a supported @barbatdev/pi-safe-ops stable, beta, or next version." >&2
+            exit 1
+          fi
+          VERSION="${TAG#@barbatdev/pi-safe-ops@}"
+          test "$TAG" = "@barbatdev/pi-safe-ops@$VERSION"
+          NPM_DIST_TAG="latest"
+          case "$VERSION" in
+            *-beta.*) NPM_DIST_TAG="beta" ;;
+            *-next.*) NPM_DIST_TAG="next" ;;
+          esac
+          printf 'npm_dist_tag=%s\n' "$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git cat-file -e "${TAG}^{tag}"
+          TAG_COMMIT="$(git rev-parse "${TAG}^{commit}")"
+          test "$TAG_COMMIT" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+      - name: Validate publish manifest and lifecycle policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const manifest = JSON.parse(readFileSync("packages/safe-ops/package.json", "utf8"));
+          const version = process.env.TAG.slice("@barbatdev/pi-safe-ops@".length);
+          const lifecycle = Object.keys(manifest.scripts ?? {}).filter((name) => /^(?:pre|post)?(?:publish|pack|install|prepare)$/.test(name));
+          if (manifest.name !== "@barbatdev/pi-safe-ops" || manifest.version !== version || manifest.private !== false) throw new Error("The manifest is not release-ready.");
+          if (manifest.publishConfig?.access !== "public" || manifest.peerDependencies?.["@earendil-works/pi-coding-agent"] !== "*") throw new Error("The publish policy is not release-ready.");
+          if (lifecycle.length > 0) throw new Error(`Package lifecycle hooks are prohibited: ${lifecycle.join(", ")}`);
+          NODE
+      - name: Install and verify the repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack pnpm install --frozen-lockfile --ignore-scripts
+          corepack pnpm run check
+      - name: Verify exact package surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { existsSync, readdirSync } from "node:fs";
+          import { spawnSync } from "node:child_process";
+          const directory = "packages/safe-ops";
+          const before = new Set(readdirSync(directory).filter((name) => name.endsWith(".tgz")));
+          const result = spawnSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], { cwd: directory, encoding: "utf8", shell: false });
+          if (result.status !== 0) throw new Error("npm pack --dry-run failed.");
+          const [pack] = JSON.parse(result.stdout);
+          const expected = ["LICENSE", "README.md", "docs/policy-contract.md", "docs/threat-model.md", "package.json", "src/argv.ts", "src/control-evidence.ts", "src/index.ts", "src/manager-classifier.ts", "src/package-spec.ts", "src/probe-contract.ts", "src/probe-runner.ts", "src/runtime.ts", "src/sql-lexer.ts", "src/sql-policy.ts"];
+          const actual = pack.files.map((file) => file.path).sort();
+          if (JSON.stringify(actual) !== JSON.stringify(expected) || before.has(pack.filename) || existsSync(`${directory}/${pack.filename}`)) throw new Error("Package allowlist changed or npm pack created an archive.");
+          NODE
+      - name: Recheck remote main and tag before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" "refs/tags/${TAG}:refs/tags/${TAG}"
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${TAG}^{commit}")" = "$GITHUB_SHA"
+      - name: Publish from the package directory
+        env:
+          NPM_DIST_TAG: ${{ steps.release_policy.outputs.npm_dist_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages/safe-ops
+          npm publish --provenance --access public --ignore-scripts \
+            --tag "$NPM_DIST_TAG"

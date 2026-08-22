@@ -2,6 +2,20 @@
   "name": "@barbatdev/pi-safe-ops",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/barbatdev/pi-packages.git",
+    "directory": "packages/safe-ops"
+  },
+  "homepage": "https://github.com/barbatdev/pi-packages#readme",
+  "bugs": {
+    "url": "https://github.com/barbatdev/pi-packages/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": ["src", "docs"],
   "pi": {
     "extensions": ["./src/index.ts"]
@@ -11,7 +25,7 @@
     "node": ">=22.19.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.82.1 <1"
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.82.1",
