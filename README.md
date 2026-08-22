@@ -4,7 +4,7 @@ A personal open-source monorepo for modular Pi packages and extensions built thr
 
 ## Status
 
-This repository is at an early stage. No packages have been published, and it does not provide installation instructions or a release process. CI verifies typechecking, tests, and the dry-run package surface.
+This repository is at an early stage. Its release process is prepared, but no package has been published or is installable. CI verifies typechecking, tests, and the dry-run package surface. See the maintainer-only [release runbook](docs/releasing.md).
 
 ## Packages
 

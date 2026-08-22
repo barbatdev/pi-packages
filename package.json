@@ -8,6 +8,11 @@
   "scripts": {
     "check": "pnpm --filter @barbatdev/pi-safe-ops run check",
     "test": "pnpm --filter @barbatdev/pi-safe-ops run test",
-    "typecheck": "pnpm --filter @barbatdev/pi-safe-ops run typecheck"
+    "typecheck": "pnpm --filter @barbatdev/pi-safe-ops run typecheck",
+    "changeset": "changeset",
+    "version:packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "3.0.0"
   }
 }
