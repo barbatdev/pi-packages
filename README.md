@@ -4,11 +4,11 @@ A personal open-source monorepo for modular Pi packages and extensions built thr
 
 ## Status
 
-This repository is at an early stage. Its release process is prepared, but no package has been published or is installable. CI verifies typechecking, tests, and the dry-run package surface. See the maintainer-only [release runbook](docs/releasing.md).
+This repository is at an early stage. `@barbatdev/pi-safe-ops@0.1.0-beta.0` is a beta candidate, not yet available from the registry; its separate publish gate has not run. The candidate is not a support or compatibility promise, and it is not a sandbox: Pi packages run with user permissions. CI verifies typechecking, tests, and the dry-run package surface. See the maintainer-only [release runbook](docs/releasing.md) for limitations and the bounded first-package bootstrap.
 
 ## Packages
 
-- [`@barbatdev/pi-safe-ops`](packages/safe-ops/README.md) — under development; private, unpublished, and not installable.
+- [`@barbatdev/pi-safe-ops`](packages/safe-ops/README.md) — `0.1.0-beta.0` beta candidate; not yet available from the registry.
 
 ## Independence
 

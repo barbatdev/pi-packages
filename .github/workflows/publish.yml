@@ -95,7 +95,7 @@ jobs:
           const result = spawnSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], { cwd: directory, encoding: "utf8", shell: false });
           if (result.status !== 0) throw new Error("npm pack --dry-run failed.");
           const [pack] = JSON.parse(result.stdout);
-          const expected = ["LICENSE", "README.md", "docs/policy-contract.md", "docs/threat-model.md", "package.json", "src/argv.ts", "src/control-evidence.ts", "src/index.ts", "src/manager-classifier.ts", "src/package-spec.ts", "src/probe-contract.ts", "src/probe-runner.ts", "src/runtime.ts", "src/sql-lexer.ts", "src/sql-policy.ts"];
+          const expected = ["CHANGELOG.md", "LICENSE", "README.md", "docs/policy-contract.md", "docs/threat-model.md", "package.json", "src/argv.ts", "src/control-evidence.ts", "src/index.ts", "src/manager-classifier.ts", "src/package-spec.ts", "src/probe-contract.ts", "src/probe-runner.ts", "src/runtime.ts", "src/sql-lexer.ts", "src/sql-policy.ts"];
           const actual = pack.files.map((file) => file.path).sort();
           if (JSON.stringify(actual) !== JSON.stringify(expected) || before.has(pack.filename) || existsSync(`${directory}/${pack.filename}`)) throw new Error("Package allowlist changed or npm pack created an archive.");
           NODE

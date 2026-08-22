@@ -1,7 +1,7 @@
 {
   "name": "@barbatdev/pi-safe-ops",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-beta.0",
+  "private": false,
   "license": "MIT",
   "keywords": ["pi-package"],
   "repository": {
@@ -16,7 +16,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["src", "docs"],
+  "files": ["src", "docs", "CHANGELOG.md"],
   "pi": {
     "extensions": ["./src/index.ts"]
   },

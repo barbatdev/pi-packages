@@ -9,10 +9,12 @@ const repositoryDirectory = join(packageDirectory, "..", "..");
 const readRepositoryFile = (path: string) => readFileSync(join(repositoryDirectory, path), "utf8");
 const readJson = (path: string): Record<string, unknown> => JSON.parse(readRepositoryFile(path)) as Record<string, unknown>;
 
-test("release readiness keeps the package unpublished and uses independent Changesets", () => {
+test("release readiness prepares a public first beta through independent Changesets", () => {
   const rootManifest = readJson("package.json");
   const packageManifest = readJson("packages/safe-ops/package.json");
   const changesets = readJson(".changeset/config.json");
+  const preState = readJson(".changeset/pre.json");
+  const changelog = readRepositoryFile("packages/safe-ops/CHANGELOG.md");
 
   assert.equal((rootManifest.devDependencies as Record<string, string>)["@changesets/cli"], "3.0.0");
   assert.equal((rootManifest.scripts as Record<string, string>).changeset, "changeset");
@@ -29,12 +31,18 @@ test("release readiness keeps the package unpublished and uses independent Chang
     ignore: [],
     privatePackages: { version: false, tag: false },
   });
-  assert.equal(packageManifest.version, "0.0.0");
-  assert.equal(packageManifest.private, true);
+  assert.equal(packageManifest.version, "0.1.0-beta.0");
+  assert.equal(packageManifest.private, false);
   assert.equal(packageManifest.license, "MIT");
   assert.equal((packageManifest.peerDependencies as Record<string, string>)["@earendil-works/pi-coding-agent"], "*");
+  assert.equal("dependencies" in packageManifest, false);
   assert.deepEqual(packageManifest.publishConfig, { access: "public" });
-  assert.equal(existsSync(join(packageDirectory, "CHANGELOG.md")), false, "the beta-only CHANGELOG and 16-file package surface are deferred");
+  assert.equal(existsSync(join(packageDirectory, "CHANGELOG.md")), true, "the beta CHANGELOG is part of the 16-file package surface");
+  assert.match(changelog, /0\.1\.0-beta\.0/);
+  assert.deepEqual(preState, { mode: "pre", tag: "beta" });
+  assert.equal(existsSync(join(repositoryDirectory, ".changeset", "pre", "safe-ops-first-beta.md")), true, "Changesets 3.0.0 retains the prerelease ledger");
+  assert.match(readRepositoryFile(".changeset/pre/safe-ops-first-beta.md"), /@barbatdev\/pi-safe-ops": minor/);
+  assert.equal(existsSync(join(repositoryDirectory, ".changeset", "safe-ops-first-beta.md")), false, "the Changesets input must move into the prerelease ledger");
 });
 
 test("publish workflow is a protected, dispatch-only OIDC gate", () => {
@@ -70,12 +78,38 @@ test("publish workflow is a protected, dispatch-only OIDC gate", () => {
   }
 });
 
-test("release documentation declares prerequisites and the deferred publish path", () => {
+test("release documentation states the bounded first-package bootstrap and future OIDC path", () => {
+  const packageReadme = readRepositoryFile("packages/safe-ops/README.md");
   const readme = readRepositoryFile("README.md");
   const runbook = readRepositoryFile("docs/releasing.md");
-  assert.match(readme, /release process is prepared/i);
-  assert.match(readme, /docs\/releasing\.md/);
-  for (const text of ["unpublished", "protect `main`", "npm-publish", "Trusted Publishing", "0.1.0-beta.0", "annotated tag", "Changesets", "never publish locally"]) {
+
+  for (const text of ["beta candidate", "pi install npm:@barbatdev/pi-safe-ops@0.1.0-beta.0", "not a sandbox", "user permissions", "user_bash"]) {
+    assert.ok(packageReadme.toLowerCase().includes(text.toLowerCase()), `package README must include ${text}`);
+  }
+  for (const text of ["beta candidate", "0.1.0-beta.0", "not yet available", "limitations", "docs/releasing.md"]) {
+    assert.ok(readme.toLowerCase().includes(text.toLowerCase()), `root README must include ${text}`);
+  }
+  for (const text of [
+    "approved issue",
+    "protected merge",
+    "main CI",
+    "privacy",
+    "annotated package tag",
+    "isolated tarball verification",
+    "exact human SHA/tag/files/hash approval",
+    "web login/2FA",
+    "scripts disabled",
+    "npm trust github @barbatdev/pi-safe-ops --file publish.yml --repository barbatdev/pi-packages --environment npm-publish --allow-publish",
+    "verify/logout/destroy",
+    "GitHub Release only after publish+trust",
+    "no provenance",
+    "never reused",
+    "OIDC",
+    "provenance",
+    "NPM_TOKEN",
+  ]) {
     assert.ok(runbook.toLowerCase().includes(text.toLowerCase()), `runbook must include ${text}`);
   }
+  const normalizedRunbook = runbook.toLowerCase();
+  assert.ok(normalizedRunbook.indexOf("oidc") < normalizedRunbook.indexOf("first-package bootstrap"), "the normal OIDC path must precede the bootstrap exception");
 });

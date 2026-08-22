@@ -2,7 +2,17 @@
 
 `@barbatdev/pi-safe-ops` is a planned native Pi package/extension for fail-closed safety checks on model-initiated package acquisition and direct SQL `DROP` commands. It is a clean-room design and does not provide a Claude-hook compatibility runtime.
 
-> **Status: development runtime manifest present.** This package remains private, unpublished, unversioned for release, and not installable.
+> **Status: beta candidate.** `@barbatdev/pi-safe-ops@0.1.0-beta.0` is prepared for a separately approved first publish. It is not yet available from the npm registry, so this is not an availability or support promise.
+
+## Beta candidate install
+
+After the separately approved publish and registry verification, install the pinned beta candidate with:
+
+```sh
+pi install npm:@barbatdev/pi-safe-ops@0.1.0-beta.0
+```
+
+This package is not a sandbox. Pi packages run with your user permissions; review the V1 boundary and source before installing.
 
 ## Problem
 
@@ -52,4 +62,4 @@ The development manifest registers the Pi extension entrypoint. Its bounded dire
 
 ## Status
 
-The V1 runtime is under development. The package is private and unpublished at version `0.0.0`; it is unversioned for release and has no installation path or publication promise.
+The V1 runtime boundary is documented above. This beta candidate does not extend that boundary, provide a compatibility or support promise, or claim registry availability before the separate publish gate completes.

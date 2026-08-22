@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const packageDirectory = join(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedPaths = [
+  "CHANGELOG.md",
   "LICENSE",
   "README.md",
   "docs/policy-contract.md",
