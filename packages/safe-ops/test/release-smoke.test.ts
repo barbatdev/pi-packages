@@ -34,8 +34,15 @@ test("manifest and Pi terminal policy fail closed", () => {
   const manifest = { name: "@barbatdev/pi-safe-ops", version: "0.1.0-beta.0", private: false, publishConfig: { access: "public" }, peerDependencies: { "@earendil-works/pi-coding-agent": "*" }, pi: { extensions: ["./src/index.ts"] } };
   assert.doesNotThrow(() => validateManifest(manifest));
   for (const invalid of [{ ...manifest, private: true }, { ...manifest, version: "1.0.0" }, { ...manifest, dependencies: { x: "1" } }, { ...manifest, peerDependencies: {} }, { ...manifest, scripts: { prepare: "x" } }]) assert.throws(() => validateManifest(invalid));
-  assert.equal(classifyPiResult("No model available", ""), "expected-no-model");
-  assert.equal(classifyPiResult("No model available", "failed to load extension"), "extension-error");
-  assert.equal(classifyPiResult("No model available", "load error"), "extension-error");
-  assert.equal(classifyPiResult("done", ""), "unexpected");
+
+  const noModel = "No models available. Use /login to log into a provider via OAuth or API key. See:\n  /tools/node_modules/@earendil-works/pi-coding-agent/docs/providers.md\n  /tools/node_modules/@earendil-works/pi-coding-agent/docs/models.md";
+  assert.equal(classifyPiResult(1, "", `\u001b[31m${noModel.replace(/\n/g, "\r\n")}\u001b[0m\n`), "expected-no-model");
+  for (const [status, stdout, stderr] of [
+    [0, "", noModel], [null, "", noModel], [1, "output", noModel], [1, "", "No model available"],
+    [1, "", `${noModel}\nnode: runtime diagnostic`], [1, "", `${noModel}\nfailed to load extension`],
+    [1, "", `${noModel}\nError: Cannot find module 'extension'`],
+    [1, "", noModel.replace("docs/models.md", "docs/other.md")],
+  ] as Array<[number | null, string, string]>) {
+    assert.equal(classifyPiResult(status, stdout, stderr), "unexpected");
+  }
 });

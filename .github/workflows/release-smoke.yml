@@ -27,15 +27,17 @@ jobs:
     timeout-minutes: 10
     env:
       EVENT_NAME: ${{ github.event_name }}
+      EVENT_REF: ${{ github.ref }}
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       PUSH_AFTER: ${{ github.event.after }}
       MANUAL_SHA: ${{ inputs.sha }}
+      BOUND_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event_name == 'workflow_dispatch' && inputs.sha || github.sha }}
       SMOKE_ROOT: ${{ runner.temp }}/release-smoke-${{ github.run_id }}-${{ github.run_attempt }}
       IMAGE: docker.io/library/node@sha256:f2bf1588ef7e8dd183d9e4cb4330a0d952204b7348ead42afb1aab11f9c4911b
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event_name == 'workflow_dispatch' && inputs.sha || github.sha }}
+          ref: ${{ env.BOUND_SHA }}
           persist-credentials: false
           fetch-depth: 1
       - name: Bind checkout to the event
@@ -43,12 +45,15 @@ jobs:
         run: |
           set -euo pipefail
           HEAD="$(git rev-parse HEAD)"
+          test "$HEAD" = "$BOUND_SHA"
           case "$EVENT_NAME" in
-            pull_request) test "$HEAD" = "$PR_HEAD_SHA" ;;
-            push) test "$HEAD" = "$GITHUB_SHA"; test "$HEAD" = "$PUSH_AFTER" ;;
+            pull_request) test "$BOUND_SHA" = "$PR_HEAD_SHA" ;;
+            push) test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$PUSH_AFTER" ;;
             workflow_dispatch)
+              test "$EVENT_REF" = "refs/heads/main"
+              [[ "$BOUND_SHA" =~ ^[a-f0-9]{40}$ ]]
               [[ "$MANUAL_SHA" =~ ^[a-f0-9]{40}$ ]]
-              test "$HEAD" = "$GITHUB_SHA"; test "$HEAD" = "$MANUAL_SHA"
+              test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$MANUAL_SHA"
               test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MANUAL_SHA"
               ;;
             *) exit 1 ;;
@@ -58,12 +63,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$SMOKE_ROOT/tools" "$SMOKE_ROOT/work"
-          docker run --rm --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /home/node:rw,noexec,nosuid,size=64m -v "$SMOKE_ROOT/tools:/tools" "$IMAGE" sh -c 'test "$(node --version)" = v22.19.0; npm install --prefix /tools --ignore-scripts --legacy-peer-deps --no-audit --no-fund --loglevel=error --package-lock=false npm@11.16.0 @earendil-works/pi-coding-agent@0.82.1'
+          docker run --rm --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /smoke-home:rw,noexec,nosuid,size=64m --env HOME=/smoke-home --env npm_config_cache=/smoke-home/.npm -v "$SMOKE_ROOT/tools:/tools" "$IMAGE" sh -c 'test "$(node --version)" = v22.19.0; npm install --prefix /tools --ignore-scripts --legacy-peer-deps --no-audit --no-fund --loglevel=error --package-lock=false npm@11.16.0 @earendil-works/pi-coding-agent@0.82.1'
       - name: Run isolated smoke
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm --network none --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=64m -e RELEASE_SMOKE_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/repo:ro" -v "$SMOKE_ROOT/tools:/tools:ro" -v "$SMOKE_ROOT/work:/work" "$IMAGE" sh -c 'test "$(node --version)" = v22.19.0; node /repo/scripts/release-smoke.mjs'
+          docker run --rm --network none --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /smoke-home:rw,noexec,nosuid,size=64m --env HOME=/smoke-home --env npm_config_cache=/smoke-home/.npm --env RELEASE_SMOKE_SHA="$BOUND_SHA" -v "$GITHUB_WORKSPACE:/repo:ro" -v "$SMOKE_ROOT/tools:/tools:ro" -v "$SMOKE_ROOT/work:/work" "$IMAGE" sh -c 'test "$(node --version)" = v22.19.0; node /repo/scripts/release-smoke.mjs'
       - name: Remove smoke state
         if: always()
         shell: bash

@@ -81,6 +81,21 @@ test("publish workflow is a protected, dispatch-only OIDC gate", () => {
 test("release smoke workflow is an isolated, release-only gate", () => {
   assert.equal(existsSync(join(repositoryDirectory, ".github/workflows/release-smoke.yml")), true, "release smoke workflow must exist");
   const workflow = readRepositoryFile(".github/workflows/release-smoke.yml");
+  const boundShaExpression = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event_name == 'workflow_dispatch' && inputs.sha || github.sha }}";
+  assert.equal((workflow.match(/^\s*BOUND_SHA:/gm) ?? []).length, 1, "one event-derived binding is the source of truth");
+  assert.ok(workflow.includes(`BOUND_SHA: ${boundShaExpression}`));
+  assert.ok(workflow.includes("ref: ${{ env.BOUND_SHA }}"));
+  assert.ok(workflow.includes('HEAD="$(git rev-parse HEAD)"\n          test "$HEAD" = "$BOUND_SHA"'));
+  assert.ok(workflow.includes('pull_request) test "$BOUND_SHA" = "$PR_HEAD_SHA" ;;'));
+  assert.ok(workflow.includes('push) test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$PUSH_AFTER" ;;'));
+  assert.ok(workflow.includes("EVENT_REF: ${{ github.ref }}"));
+  for (const text of ['test "$EVENT_REF" = "refs/heads/main"', '[[ "$BOUND_SHA" =~ ^[a-f0-9]{40}$ ]]', 'test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$MANUAL_SHA"', 'git ls-remote origin refs/heads/main | cut -f1)" = "$MANUAL_SHA"']) assert.ok(workflow.includes(text), `manual rerun must include ${text}`);
+  const dockerRuns = workflow.match(/^\s*docker run .*$/gm) ?? [];
+  assert.equal(dockerRuns.length, 2, "both Docker phases are audited");
+  for (const command of dockerRuns) for (const text of ["--tmpfs /smoke-home:rw,noexec,nosuid,size=64m", "--env HOME=/smoke-home", "--env npm_config_cache=/smoke-home/.npm"]) assert.ok(command.includes(text), `Docker phase must include ${text}`);
+  assert.ok(dockerRuns[1]?.includes('--env RELEASE_SMOKE_SHA="$BOUND_SHA"'));
+  assert.equal(dockerRuns[1]?.includes("GITHUB_SHA"), false, "the smoke receives only the bound SHA");
+  assert.equal(/\/(?:home|Users)\//.test(workflow), false, "tracked workflow passes the exact privacy path regex");
   for (const text of [
     "name: Release smoke", "pull_request:", "push:", "workflow_dispatch:", "contents: read", "timeout-minutes:",
     "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "persist-credentials: false", "fetch-depth: 1",
