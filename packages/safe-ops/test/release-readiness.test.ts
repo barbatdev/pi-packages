@@ -78,6 +78,46 @@ test("publish workflow is a protected, dispatch-only OIDC gate", () => {
   }
 });
 
+test("release smoke workflow is an isolated, release-only gate", () => {
+  assert.equal(existsSync(join(repositoryDirectory, ".github/workflows/release-smoke.yml")), true, "release smoke workflow must exist");
+  const workflow = readRepositoryFile(".github/workflows/release-smoke.yml");
+  const boundShaExpression = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event_name == 'workflow_dispatch' && inputs.sha || github.sha }}";
+  assert.equal((workflow.match(/^\s*BOUND_SHA:/gm) ?? []).length, 1, "one event-derived binding is the source of truth");
+  assert.ok(workflow.includes(`BOUND_SHA: ${boundShaExpression}`));
+  assert.ok(workflow.includes("ref: ${{ env.BOUND_SHA }}"));
+  assert.ok(workflow.includes('HEAD="$(git rev-parse HEAD)"\n          test "$HEAD" = "$BOUND_SHA"'));
+  assert.ok(workflow.includes('pull_request) test "$BOUND_SHA" = "$PR_HEAD_SHA" ;;'));
+  assert.ok(workflow.includes('push) test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$PUSH_AFTER" ;;'));
+  assert.ok(workflow.includes("EVENT_REF: ${{ github.ref }}"));
+  for (const text of ['test "$EVENT_REF" = "refs/heads/main"', '[[ "$BOUND_SHA" =~ ^[a-f0-9]{40}$ ]]', 'test "$BOUND_SHA" = "$GITHUB_SHA"; test "$BOUND_SHA" = "$MANUAL_SHA"', 'git ls-remote origin refs/heads/main | cut -f1)" = "$MANUAL_SHA"']) assert.ok(workflow.includes(text), `manual rerun must include ${text}`);
+  const dockerRuns = workflow.match(/^\s*docker run .*$/gm) ?? [];
+  assert.equal(dockerRuns.length, 2, "both Docker phases are audited");
+  for (const command of dockerRuns) for (const text of ["--tmpfs /smoke-home:rw,noexec,nosuid,size=64m", "--env HOME=/smoke-home", "--env npm_config_cache=/smoke-home/.npm"]) assert.ok(command.includes(text), `Docker phase must include ${text}`);
+  assert.ok(dockerRuns[1]?.includes('--env RELEASE_SMOKE_SHA="$BOUND_SHA"'));
+  assert.equal(dockerRuns[1]?.includes("GITHUB_SHA"), false, "the smoke receives only the bound SHA");
+  assert.equal(/\/(?:home|Users)\//.test(workflow), false, "tracked workflow passes the exact privacy path regex");
+  assert.equal(workflow.includes("${{ runner.temp }}"), false, "job environments cannot use the runner context");
+  const jobEnvironment = workflow.match(/^    env:\n([\s\S]*?)^    steps:/m)?.[1];
+  assert.ok(jobEnvironment, "smoke job environment must exist");
+  assert.ok(jobEnvironment.includes("SMOKE_NAME: release-smoke-${{ github.run_id }}-${{ github.run_attempt }}"), "smoke name uses only job-env-supported GitHub contexts");
+  assert.equal(jobEnvironment.includes("SMOKE_ROOT:"), false, "the root is derived in each shell step from the trusted runner environment");
+  const stepRun = (name: string) => workflow.match(new RegExp(`- name: ${name}[\\s\\S]*?run: \\|\\n([\\s\\S]*?)(?=\\n          - name:|$)`))?.[1];
+  for (const name of ["Bootstrap pinned tools", "Run isolated smoke", "Remove smoke state"]) {
+    assert.ok(stepRun(name)?.includes('SMOKE_ROOT="$RUNNER_TEMP/$SMOKE_NAME"'), `${name} derives its root from trusted runner state`);
+  }
+  assert.ok(stepRun("Remove smoke state")?.includes('case "$SMOKE_ROOT" in "$RUNNER_TEMP"/release-smoke-*)'), "cleanup retains the exact trusted-prefix guard");
+  for (const text of [
+    "name: Release smoke", "pull_request:", "push:", "workflow_dispatch:", "contents: read", "timeout-minutes:",
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "persist-credentials: false", "fetch-depth: 1",
+    "docker.io/library/node@sha256:f2bf1588ef7e8dd183d9e4cb4330a0d952204b7348ead42afb1aab11f9c4911b", "--network none",
+    "npm@11.16.0", "@earendil-works/pi-coding-agent@0.82.1", "--ignore-scripts", "--read-only", "--cap-drop ALL", "--security-opt no-new-privileges",
+    "github.event.pull_request.head.sha", "github.event.after", "git ls-remote origin refs/heads/main", "release-smoke.mjs", "rm -rf \"$SMOKE_ROOT\"",
+  ]) assert.ok(workflow.includes(text), `release smoke must include ${text}`);
+  for (const forbidden of ["pull_request_target:", "self-hosted", "secrets.", "id-token: write", "actions/cache", "upload-artifact", "download-artifact", "npm publish", "npm trust", "git tag", "gh release", "docker.sock"]) {
+    assert.equal(workflow.includes(forbidden), false, `release smoke must not include ${forbidden}`);
+  }
+});
+
 test("release documentation states the bounded first-package bootstrap and future OIDC path", () => {
   const packageReadme = readRepositoryFile("packages/safe-ops/README.md");
   const readme = readRepositoryFile("README.md");
@@ -107,6 +147,8 @@ test("release documentation states the bounded first-package bootstrap and futur
     "OIDC",
     "provenance",
     "NPM_TOKEN",
+    "successful `Release smoke` push run",
+    "Manual dispatch is only a same-main-SHA diagnostic rerun",
   ]) {
     assert.ok(runbook.toLowerCase().includes(text.toLowerCase()), `runbook must include ${text}`);
   }
