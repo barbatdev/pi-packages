@@ -24,3 +24,9 @@ pi-packages is independent from Pi and [gentle-pi](https://github.com/Gentleman-
 - Use the [bug report](.github/ISSUE_TEMPLATE/bug_report.md) or [feature request](.github/ISSUE_TEMPLATE/feature_request.md) template for public proposals.
 - Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 - This project is available under the [MIT License](LICENSE).
+
+---
+
+<a href="https://github.com/Gentleman-Programming/gentle-ai">
+  <img width="220" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png" alt="Built with Gentle-AI" />
+</a>
